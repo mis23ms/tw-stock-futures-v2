@@ -12,39 +12,39 @@ def clean_int(s):
     try: return int(str(s).replace(",", "").strip())
     except: return 0
 
-def fetch_data(ticker, date_s):
-    f_code = F_MAP.get(ticker)
-    try:
-        # 日期格式 YYYY/MM/DD
-        q_date = f"{date_s[0:4]}/{date_s[4:6]}/{date_s[6:8]}"
-        payload = {"queryDate": q_date, "commodityId": f_code}
-        r = requests.post(TAIFEX_URL, data=payload, timeout=20)
-        r.encoding = 'utf-8'
-        
-        if "查無資料" in r.text:
-            return {"error": "期交所查無本日數據"}
-            
-        soup = BeautifulSoup(r.text, "lxml")
-        table = soup.find("table", class_="table_f")
+import re  # 確保檔案頂部有 import re
+
+# ... (fetch_data 函式內部)
         rows = table.find_all("tr") if table else []
         
-        # 尋找數據彙總列
-        all_row = next((tr for tr in rows if "所有契約" in tr.get_text()), None)
-        if not all_row: return {"error": "找不到『所有契約』數據列"}
+        # 🟢 [最小修改]：使用混合抓取與空白正規化
+        all_row_cols = None
+        for tr in rows:
+            # 同時抓取標題格(th)與數據格(td)
+            cells = tr.find_all(["th", "td"])
+            # 1. 抓取文字 2. 去除所有換行與空白 3. 轉為乾淨列表
+            cols = [re.sub(r"\s+", "", c.get_text(strip=True)) for c in cells]
             
-        cols = [td.get_text(strip=True) for td in all_row.find_all("td")]
-        if len(cols) < 10: return {"error": "表格結構異常"}
-
-        # 索引 2:五多, 3:五空, 5:十多, 6:十空, 9:總未平倉量
-        t5b, t5s = clean_int(cols[2]), clean_int(cols[3])
-        t10b, t10s = clean_int(cols[5]), clean_int(cols[6])
+            # 判斷這列是否包含「所有契約」
+            if any("所有契約" in x for x in cols):
+                all_row_cols = cols
+                break
+        
+        if not all_row_cols:
+            return {"error": "找不到『所有契約』數據列"}
+            
+        # 🟢 [索引對齊]：根據正規化後的 cols 抓取數據
+        # 索引通常為：2:五多, 3:五空, 5:十多, 6:十空, 9:總未平倉
+        t5b, t5s = clean_int(all_row_cols[2]), clean_int(all_row_cols[3])
+        t10b, t10s = clean_int(all_row_cols[5]), clean_int(all_row_cols[6])
+        oi = all_row_cols[9]
         
         return {
             "top5": {"buy": t5b, "sell": t5s, "net": t5b - t5s},
             "top10": {"buy": t10b, "sell": t10s, "net": t10b - t10s},
-            "oi": cols[9]
+            "oi": oi,
+            "contract_month": "所有契約" # 強制標準化輸出
         }
-    except: return {"error": "網路連線或解析失敗"}
 
 def main():
     tz = timezone(timedelta(hours=8))
