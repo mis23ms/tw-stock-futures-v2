@@ -20,32 +20,36 @@
     <p id="meta" class="muted">正在載入數據...</p>
     <div id="grid" class="grid"></div>
 
-    <script>
-        async function load() {
-            try {
-                const r = await fetch('./futures_data.json');
-                const d = await r.json();
-                document.getElementById('meta').innerText = `數據日期：${d.date} (每日 16:00 後自動更新)`;
-                
-                document.getElementById('grid').innerHTML = d.items.map(it => {
-                    const res = it.data;
-                    if (res.error) return `<div class="card"><h3>${it.name}</h3><p class="bad">${res.error}</p></div>`;
-                    return `
-                        <div class="card">
-                            <h3>${it.name} (${it.ticker})</h3>
-                            <p>前五大淨部位：<span class="${res.top5.net >= 0 ? 'net-up' : 'net-down'}">${res.top5.net > 0 ? '+' : ''}${res.top5.net}</span></p>
-                            <p>前十大淨部位：<span class="${res.top10.net >= 0 ? 'net-up' : 'net-down'}">${res.top10.net > 0 ? '+' : ''}${res.top10.net}</span></p>
-                            <div class="muted" style="margin-top:12px; font-size: 0.9em;">
-                                <div>五大多/空：${res.top5.buy} / ${res.top5.sell}</div>
-                                <div>十大多/空：${res.top10.buy} / ${res.top10.sell}</div>
-                                <div>總未平倉量：${res.oi}</div>
-                            </div>
-                        </div>`;
-                }).join('');
-            } catch (e) {
-                document.getElementById('meta').innerHTML = '<span class="bad">尚未偵測到數據。請點選 Actions 執行 Run workflow。</span>';
-            }
-        }
+  async function load() {
+    try {
+        const r = await fetch('./futures_data.json');
+        const d = await r.json();
+        document.getElementById('meta').innerText = `數據日期：${d.date} (每日 16:00 後更新)`;
+        
+        document.getElementById('grid').innerHTML = d.items.map(it => {
+            const res = it.data;
+            if (res.error) return `<div class="card"><h3>${it.name}</h3><p class="bad">${res.error}</p></div>`;
+            
+            // [修正]：防呆判斷，確保抓得到 net 數值
+            const t5net = res.top5 ? res.top5.net : 0;
+            const t10net = res.top10 ? res.top10.net : 0;
+            
+            return `
+                <div class="card">
+                    <h3>${it.name} (${it.ticker})</h3>
+                    <p>前五大淨部位：<span class="${t5net >= 0 ? 'net-up' : 'net-down'}">${t5net > 0 ? '+' : ''}${t5net}</span></p>
+                    <p>前十大淨部位：<span class="${t10net >= 0 ? 'net-up' : 'net-down'}">${t10net > 0 ? '+' : ''}${t10net}</span></p>
+                    <div class="muted" style="margin-top:15px; font-size: 0.9em;">
+                        <div>前五大多/空：${res.top5.buy} / ${res.top5.sell}</div>
+                        <div>前十大多/空：${res.top10.buy} / ${res.top10.sell}</div>
+                        <div>全體未平倉量：${res.oi}</div>
+                    </div>
+                </div>`;
+        }).join('');
+    } catch (e) {
+        document.getElementById('meta').innerHTML = '<span class="bad">尚未偵測到 JSON 數據。請至 Actions 執行 Run workflow。</span>';
+    }
+}
         load();
     </script>
 </body>
